@@ -1,0 +1,222 @@
+// GiftFlow — data model
+//
+// SQLite for now, as agreed: local development only. Everything here is written
+// to survive the move to Postgres with nothing but a provider change —
+// no enums, no scalar lists, no native type attributes. Status columns are
+// plain strings with the allowed values written above them.
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+/// Shopify's own session storage. Shape is dictated by
+/// @shopify/shopify-app-session-storage-prisma — do not rename its columns.
+model Session {
+  id            String    @id
+  shop          String
+  state         String
+  isOnline      Boolean   @default(false)
+  scope         String?
+  expires       DateTime?
+  accessToken   String
+  userId        BigInt?
+  firstName     String?
+  lastName      String?
+  email         String?
+  accountOwner  Boolean   @default(false)
+  locale        String?
+  collaborator  Boolean?  @default(false)
+  emailVerified Boolean?  @default(false)
+
+  @@index([shop])
+}
+
+/// One row per install.
+model Shop {
+  id          String    @id @default(cuid())
+  domain      String    @unique
+  name        String?
+  plan        String    @default("free")
+  installedAt DateTime  @default(now())
+  uninstalledAt DateTime?
+
+  settings   Settings?
+  categories CardCategory[]
+  cards      CardDesign[]
+  drafts     GiftDraft[]
+  orders     GiftOrder[]
+  printJobs  PrintJob[]
+}
+
+/// Everything the theme hardcodes today becomes a row here.
+model Settings {
+  id     String @id @default(cuid())
+  shopId String @unique
+  shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  /// The collection the flow picks gift products from. Was `test_step1`,
+  /// hardcoded at gift-flow.liquid:561.
+  giftCollectionHandle String?
+  /// The variant added to the cart to charge for the card. Was one of four
+  /// hardcoded variant IDs spread across eight files.
+  cardVariantId        String?
+  /// Charged per card, in the shop's minor units. 30 kr -> 3000.
+  cardPriceMinor       Int     @default(0)
+
+  /// Message editor
+  messageMaxChars Int     @default(300)
+  allowUploads    Boolean @default(true)
+  /// Customer uploads on a public app need a human in the loop. When on, an
+  /// upload is held until a merchant approves it.
+  moderateUploads Boolean @default(false)
+  maxUploadBytes  Int     @default(5242880)
+
+  /// Print. A public app cannot assume one card stock, so trim and bleed are
+  /// merchant settings rather than constants.
+  pdfWidthMm  Float  @default(105)
+  pdfHeightMm Float  @default(148)
+  pdfBleedMm  Float  @default(3)
+  pdfCropMarks Boolean @default(true)
+  /// Shown on packing slips so the merchant still sees the gift without the app.
+  visiblePropertyName  String @default("Gift kort")
+  visiblePropertyValue String @default("Ja")
+
+  updatedAt DateTime @updatedAt
+}
+
+/// The step-4 filter tabs.
+model CardCategory {
+  id     String @id @default(cuid())
+  shopId String
+  shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  name      String
+  handle    String
+  locale    String  @default("da")
+  sortOrder Int     @default(0)
+  active    Boolean @default(true)
+
+  cards CardDesign[]
+
+  @@unique([shopId, handle])
+  @@index([shopId])
+}
+
+/// The merchant-managed card catalogue. Replaces the candyexpress endpoints,
+/// which an App Store merchant has no account for.
+model CardDesign {
+  id     String @id @default(cuid())
+  shopId String
+  shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  categoryId String?
+  category   CardCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  title        String
+  /// Storage key, not a URL — the public URL is derived at read time so the
+  /// storage backend can change without rewriting rows.
+  imageKey     String
+  thumbnailKey String?
+  /// Comma-separated. A scalar list would not survive the move to Postgres
+  /// without a migration, and this is only ever used for filtering.
+  tags         String  @default("")
+  priceMinor   Int     @default(0)
+  sortOrder    Int     @default(0)
+  active       Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([shopId, active])
+}
+
+/// Created before add-to-cart. The token is the only thing that reaches the
+/// cart, which keeps the line item small, lets the message be validated and
+/// sanitized server-side, and makes the data deletable on customers/redact.
+model GiftDraft {
+  id     String @id @default(cuid())
+  shopId String
+  shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  token String @unique
+
+  /// Either a catalogue card...
+  cardDesignId String?
+  /// ...or a customer upload. "pending" | "approved" | "rejected"
+  uploadKey      String?
+  uploadStatus   String?
+  uploadHash     String?
+
+  messageHtml String @default("")
+  messageText String @default("")
+  recipient   String?
+  sender      String?
+
+  createdAt DateTime @default(now())
+  /// Swept 48 hours after creation if it never became an order, so abandoned
+  /// carts do not accumulate personal data.
+  expiresAt DateTime
+
+  @@index([shopId, expiresAt])
+}
+
+/// Written by the orders/create webhook. Holds a snapshot rather than a
+/// reference: a merchant editing or deleting a card design later must not
+/// change what was already printed.
+model GiftOrder {
+  id     String @id @default(cuid())
+  shopId String
+  shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  orderId       String
+  orderName     String?
+  lineItemId    String
+  orderedAt     DateTime
+  customerName  String?
+
+  /// Snapshot
+  cardTitle    String?
+  cardImageKey String?
+  messageHtml  String @default("")
+  messageText  String @default("")
+  recipient    String?
+  sender       String?
+
+  /// "new" | "printed" | "packed"
+  status    String    @default("new")
+  printedAt DateTime?
+  /// Cached render, so a re-print costs nothing and is byte-identical.
+  pdfKey    String?
+
+  printJobId String?
+  printJob   PrintJob? @relation(fields: [printJobId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@unique([shopId, lineItemId])
+  @@index([shopId, status])
+  @@index([shopId, orderedAt])
+}
+
+/// A batch print. Fifty orders a day makes one-click-per-order painful.
+model PrintJob {
+  id     String @id @default(cuid())
+  shopId String
+  shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  pdfKey    String?
+  pageCount Int      @default(0)
+  /// "pending" | "ready" | "failed"
+  status    String   @default("pending")
+  error     String?
+  createdAt DateTime @default(now())
+
+  orders GiftOrder[]
+
+  @@index([shopId, createdAt])
+}

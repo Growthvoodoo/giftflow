@@ -1,0 +1,12 @@
+node_modules
+/build
+/.cache
+/public/build
+.env
+.env.local
+.shopify
+*.sqlite
+*.sqlite-journal
+/prisma/dev.db*
+/storage
+node_modules/

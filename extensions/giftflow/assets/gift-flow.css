@@ -1,0 +1,77 @@
+/* GiftFlow — deliberately light. The block inherits the merchant's theme for
+   type and colour; only layout and state live here, so it does not fight
+   whatever theme it is installed into. */
+
+.giftflow { --gf-gap: 1rem; --gf-accent: currentColor; }
+
+.giftflow__steps {
+  display: flex; flex-wrap: wrap; gap: var(--gf-gap);
+  list-style: none; margin: 0 0 1.5rem; padding: 0;
+  font-size: .875rem; opacity: .6;
+}
+.giftflow__steps li.is-current { opacity: 1; font-weight: 600; }
+
+.giftflow__panel { display: none; }
+.giftflow__panel.is-active { display: block; }
+.giftflow__heading { margin: 0 0 1rem; }
+
+.giftflow__grid,
+.giftflow__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--gf-gap);
+}
+
+.giftflow__product,
+.giftflow__card {
+  display: flex; flex-direction: column; gap: .5rem;
+  padding: .5rem; cursor: pointer; text-align: left;
+  background: none; border: 2px solid transparent; border-radius: 8px;
+  font: inherit; color: inherit;
+}
+.giftflow__product:focus-visible,
+.giftflow__card:focus-visible { outline: 2px solid var(--gf-accent); outline-offset: 2px; }
+.giftflow__product.is-selected,
+.giftflow__card.is-selected { border-color: var(--gf-accent); }
+
+.giftflow__product img,
+.giftflow__card img {
+  width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 4px;
+}
+.giftflow__product-price { opacity: .7; font-size: .875rem; }
+
+.giftflow__categories { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1rem; }
+.giftflow__category,
+.giftflow__variant {
+  padding: .5rem 1rem; cursor: pointer; font: inherit; color: inherit;
+  background: none; border: 1px solid currentColor; border-radius: 999px; opacity: .6;
+}
+.giftflow__category.is-selected,
+.giftflow__variant.is-selected { opacity: 1; font-weight: 600; }
+.giftflow__variant:disabled { opacity: .3; cursor: not-allowed; text-decoration: line-through; }
+
+.giftflow__variants { display: flex; flex-wrap: wrap; gap: .5rem; }
+
+.giftflow__message { display: flex; flex-direction: column; gap: .75rem; max-width: 34rem; }
+.giftflow__message input,
+.giftflow__message textarea {
+  width: 100%; padding: .75rem; font: inherit;
+  border: 1px solid currentColor; border-radius: 6px; background: transparent; color: inherit;
+}
+.giftflow__count { font-size: .8125rem; opacity: .6; margin: 0; }
+.giftflow__count.is-over { opacity: 1; font-weight: 600; }
+
+.giftflow__upload { margin-top: 1.5rem; }
+.giftflow__upload-label { display: flex; flex-direction: column; gap: .5rem; font-size: .875rem; }
+
+.giftflow__actions { display: flex; gap: .75rem; margin-top: 2rem; }
+.giftflow__actions button { padding: .75rem 1.5rem; font: inherit; cursor: pointer; border-radius: 6px; }
+.giftflow__actions button:disabled { opacity: .4; cursor: not-allowed; }
+
+.giftflow__error { margin: .5rem 0 0; font-size: .875rem; }
+.giftflow__empty { opacity: .6; }
+
+@media (max-width: 480px) {
+  .giftflow__grid, .giftflow__cards { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+  .giftflow__actions { flex-direction: column; }
+}

@@ -1,0 +1,145 @@
+{%- comment -%}
+  GiftFlow — the storefront flow, as an app block.
+
+  Every value the old theme hardcoded is a block setting or comes from the app
+  over the proxy: no variant IDs, no collection handles, no candyexpress.
+
+  The block renders the shell and the step 1 product grid from Liquid so the
+  first paint is server-rendered and indexable. Steps 2, 4 and 5 are driven by
+  gift-flow.js, which talks to /apps/giftflow/*.
+{%- endcomment -%}
+
+{% assign collection_handle = block.settings.gift_collection.handle | default: '' %}
+
+<div
+  class="giftflow"
+  data-giftflow
+  data-proxy="{{ block.settings.proxy_prefix | default: '/apps/giftflow' }}"
+  data-collection="{{ collection_handle }}"
+  data-money-format="{{ shop.money_format | escape }}"
+>
+  <ol class="giftflow__steps" data-giftflow-steps>
+    <li class="is-current" data-step="1">{{ block.settings.label_step1 }}</li>
+    <li data-step="2">{{ block.settings.label_step2 }}</li>
+    <li data-step="3">{{ block.settings.label_step3 }}</li>
+    <li data-step="4">{{ block.settings.label_step4 }}</li>
+  </ol>
+
+  {%- comment -%} Step 1 — choose a product from the merchant's gift collection. {%- endcomment -%}
+  <section class="giftflow__panel is-active" data-panel="1">
+    <h2 class="giftflow__heading">{{ block.settings.heading_step1 }}</h2>
+    {%- if collection_handle == blank -%}
+      <p class="giftflow__empty">
+        {{ 'No gift collection is set. Choose one in the block settings.' }}
+      </p>
+    {%- else -%}
+      <div class="giftflow__grid">
+        {%- for product in collections[collection_handle].products limit: 48 -%}
+          <button
+            type="button"
+            class="giftflow__product"
+            data-product
+            data-product-handle="{{ product.handle }}"
+            data-product-title="{{ product.title | escape }}"
+            data-variants='{{ product.variants | json | escape }}'
+          >
+            {%- if product.featured_image -%}
+              <img src="{{ product.featured_image | image_url: width: 400 }}"
+                   alt="{{ product.featured_image.alt | escape }}" loading="lazy" width="400">
+            {%- endif -%}
+            <span class="giftflow__product-title">{{ product.title }}</span>
+            <span class="giftflow__product-price">{{ product.price | money }}</span>
+          </button>
+        {%- else -%}
+          <p class="giftflow__empty">{{ 'That collection has no products yet.' }}</p>
+        {%- endfor -%}
+      </div>
+    {%- endif -%}
+  </section>
+
+  {%- comment -%} Step 2 — variant, when the chosen product has more than one. {%- endcomment -%}
+  <section class="giftflow__panel" data-panel="2">
+    <h2 class="giftflow__heading">{{ block.settings.heading_step2 }}</h2>
+    <div class="giftflow__variants" data-variants-target></div>
+  </section>
+
+  {%- comment -%} Step 3 — the card, fetched from the app. {%- endcomment -%}
+  <section class="giftflow__panel" data-panel="3">
+    <h2 class="giftflow__heading">{{ block.settings.heading_step3 }}</h2>
+    <div class="giftflow__categories" data-categories></div>
+    <div class="giftflow__cards" data-cards>
+      <p class="giftflow__empty" data-cards-loading>{{ 'Loading cards…' }}</p>
+    </div>
+
+    <div class="giftflow__upload" data-upload hidden>
+      <label class="giftflow__upload-label">
+        {{ block.settings.label_upload }}
+        <input type="file" accept="image/jpeg,image/png,image/webp" data-upload-input>
+      </label>
+      <p class="giftflow__error" data-upload-error hidden></p>
+    </div>
+  </section>
+
+  {%- comment -%} Step 4 — the message. {%- endcomment -%}
+  <section class="giftflow__panel" data-panel="4">
+    <h2 class="giftflow__heading">{{ block.settings.heading_step4 }}</h2>
+    <div class="giftflow__message">
+      <input type="text" data-recipient placeholder="{{ block.settings.placeholder_to | escape }}" maxlength="120">
+      <textarea data-message rows="6" placeholder="{{ block.settings.placeholder_message | escape }}"></textarea>
+      <input type="text" data-sender placeholder="{{ block.settings.placeholder_from | escape }}" maxlength="120">
+      <p class="giftflow__count"><span data-count>0</span> / <span data-limit>—</span></p>
+      <p class="giftflow__error" data-message-error hidden></p>
+    </div>
+  </section>
+
+  <div class="giftflow__actions">
+    <button type="button" class="giftflow__back" data-back hidden>{{ block.settings.label_back }}</button>
+    <button type="button" class="giftflow__next" data-next disabled>{{ block.settings.label_next }}</button>
+    <button type="button" class="giftflow__submit" data-submit hidden>{{ block.settings.label_submit }}</button>
+  </div>
+
+  <p class="giftflow__error" data-fatal hidden></p>
+</div>
+
+{{ 'gift-flow.css' | asset_url | stylesheet_tag }}
+<script src="{{ 'gift-flow.js' | asset_url }}" defer></script>
+
+{% schema %}
+{
+  "name": "GiftFlow",
+  "target": "section",
+  "settings": [
+    {
+      "type": "collection",
+      "id": "gift_collection",
+      "label": "Gift collection",
+      "info": "The products a customer chooses from in step 1."
+    },
+    {
+      "type": "text",
+      "id": "proxy_prefix",
+      "label": "App proxy path",
+      "default": "/apps/giftflow",
+      "info": "Only change this if you changed the proxy subpath in the app."
+    },
+    { "type": "header", "content": "Step labels" },
+    { "type": "text", "id": "label_step1", "label": "Step 1", "default": "Gift" },
+    { "type": "text", "id": "label_step2", "label": "Step 2", "default": "Options" },
+    { "type": "text", "id": "label_step3", "label": "Step 3", "default": "Card" },
+    { "type": "text", "id": "label_step4", "label": "Step 4", "default": "Message" },
+    { "type": "header", "content": "Headings" },
+    { "type": "text", "id": "heading_step1", "label": "Step 1 heading", "default": "Choose your gift" },
+    { "type": "text", "id": "heading_step2", "label": "Step 2 heading", "default": "Choose an option" },
+    { "type": "text", "id": "heading_step3", "label": "Step 3 heading", "default": "Pick a card" },
+    { "type": "text", "id": "heading_step4", "label": "Step 4 heading", "default": "Write your message" },
+    { "type": "header", "content": "Buttons and placeholders" },
+    { "type": "text", "id": "label_next", "label": "Next", "default": "Next" },
+    { "type": "text", "id": "label_back", "label": "Back", "default": "Back" },
+    { "type": "text", "id": "label_submit", "label": "Add to cart", "default": "Add to cart" },
+    { "type": "text", "id": "label_upload", "label": "Upload label", "default": "Or upload your own image" },
+    { "type": "text", "id": "placeholder_to", "label": "Recipient placeholder", "default": "To" },
+    { "type": "text", "id": "placeholder_from", "label": "Sender placeholder", "default": "From" },
+    { "type": "text", "id": "placeholder_message", "label": "Message placeholder", "default": "Write your greeting here" }
+  ]
+}
+{% endschema %}

@@ -1,0 +1,62 @@
+# GiftFlow — Shopify app configuration
+#
+# client_id is filled in by `npm run config:link` (or the first `shopify app
+# dev`), which creates or links the app in the Partner Dashboard. With
+# shopify.web.toml present, `shopify app dev` rewrites application_url, the
+# redirect URLs and app_proxy.url to the current tunnel, so the example.com
+# placeholders below only matter for a real deployment.
+
+client_id = ""
+name = "GiftFlow"
+handle = "giftflow"
+application_url = "https://example.com"
+embedded = true
+
+[build]
+automatically_update_urls_on_dev = true
+
+[access_scopes]
+# read_products/write_products  — the flow reads the gift collection, and the
+#                                 card charge is a variant on a product.
+# read_orders                   — the orders/create webhook payload.
+# write_draft_orders is deliberately absent: the app never creates orders.
+scopes = "read_products,write_products,read_orders"
+
+[auth]
+redirect_urls = [
+  "https://example.com/auth/callback",
+  "https://example.com/auth/shopify/callback"
+]
+
+# Storefront app proxy. Everything the theme extension calls goes through here:
+# Shopify signs each request, so the app can trust the shop it names without the
+# storefront holding any credential.
+#   https://{shop}/apps/giftflow/cards    -> GET  catalogue
+#   https://{shop}/apps/giftflow/uploads  -> POST customer image
+#   https://{shop}/apps/giftflow/drafts   -> POST card + message, returns token
+[app_proxy]
+url = "https://example.com/proxy"
+subpath = "giftflow"
+prefix = "apps"
+
+[webhooks]
+api_version = "2025-07"
+
+  [[webhooks.subscriptions]]
+  topics = [ "orders/create" ]
+  uri = "/webhooks/orders/create"
+
+  [[webhooks.subscriptions]]
+  topics = [ "app/uninstalled" ]
+  uri = "/webhooks/app/uninstalled"
+
+  [[webhooks.subscriptions]]
+  topics = [ "app/scopes_update" ]
+  uri = "/webhooks/app/scopes_update"
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/compliance"
+  compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
+
+[pos]
+embedded = false
