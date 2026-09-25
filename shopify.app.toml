@@ -6,7 +6,7 @@
 # redirect URLs and app_proxy.url to the current tunnel, so the example.com
 # placeholders below only matter for a real deployment.
 
-client_id = ""
+client_id = "1c0ac4f4bebf128d097b7d74d98b4d4e"
 name = "GiftFlow"
 handle = "giftflow"
 application_url = "https://example.com"
