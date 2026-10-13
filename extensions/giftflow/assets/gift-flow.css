@@ -75,3 +75,5 @@
   .giftflow__grid, .giftflow__cards { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
   .giftflow__actions { flex-direction: column; }
 }
+
+.giftflow__note { margin: 0 0 12px; font-size: 14px; opacity: .8; }

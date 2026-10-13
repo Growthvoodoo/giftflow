@@ -29,11 +29,15 @@
   <section class="giftflow__panel is-active" data-panel="1">
     <h2 class="giftflow__heading">{{ block.settings.heading_step1 }}</h2>
     {%- if collection_handle == blank -%}
-      <p class="giftflow__empty">
-        {{ 'No gift collection is set. Choose one in the block settings.' }}
-      </p>
+      {%- comment -%}
+        No collection on the block: the script loads the one chosen in the
+        app's settings instead.
+      {%- endcomment -%}
+      <div class="giftflow__grid" data-product-grid>
+        <p class="giftflow__empty" data-products-loading>{{ 'Loading gifts…' }}</p>
+      </div>
     {%- else -%}
-      <div class="giftflow__grid">
+      <div class="giftflow__grid" data-product-grid>
         {%- for product in collections[collection_handle].products limit: 48 -%}
           <button
             type="button"
@@ -45,7 +49,8 @@
           >
             {%- if product.featured_image -%}
               <img src="{{ product.featured_image | image_url: width: 400 }}"
-                   alt="{{ product.featured_image.alt | escape }}" loading="lazy" width="400">
+                   alt="{{ product.featured_image.alt | escape }}" loading="lazy" width="400"
+                   height="{{ 400 | divided_by: product.featured_image.aspect_ratio | round }}">
             {%- endif -%}
             <span class="giftflow__product-title">{{ product.title }}</span>
             <span class="giftflow__product-price">{{ product.price | money }}</span>
@@ -66,6 +71,7 @@
   {%- comment -%} Step 3 — the card, fetched from the app. {%- endcomment -%}
   <section class="giftflow__panel" data-panel="3">
     <h2 class="giftflow__heading">{{ block.settings.heading_step3 }}</h2>
+    <p class="giftflow__note" data-card-price hidden></p>
     <div class="giftflow__categories" data-categories></div>
     <div class="giftflow__cards" data-cards>
       <p class="giftflow__empty" data-cards-loading>{{ 'Loading cards…' }}</p>

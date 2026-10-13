@@ -1,8 +1,11 @@
+import { jsonResponse } from "../lib/http.server";
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { getSettings } from "../lib/shop.server";
 import { hash, keyForUpload, put } from "../lib/storage.server";
+import { sniffImage } from "../lib/images.server";
+import { storedPlan } from "../lib/billing.server";
 
 /**
  * POST /apps/giftflow/uploads
@@ -12,14 +15,6 @@ import { hash, keyForUpload, put } from "../lib/storage.server";
  * candyexpress unauthenticated. This is the real check: size and type are
  * verified from the bytes, not from what the browser claims.
  */
-
-// Sniffed from the file header rather than trusted from Content-Type, which a
-// client sets freely.
-const MAGIC: Array<{ ext: string; mime: string; test: (b: Buffer) => boolean }> = [
-  { ext: "jpg", mime: "image/jpeg", test: (b) => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff },
-  { ext: "png", mime: "image/png", test: (b) => b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) },
-  { ext: "webp", mime: "image/webp", test: (b) => b.subarray(0, 4).toString() === "RIFF" && b.subarray(8, 12).toString() === "WEBP" },
-];
 
 /** Crude per-shop throttle. Enough to stop a script; not a substitute for a
  *  real limiter once this is behind more than one instance. */
@@ -37,56 +32,61 @@ function rateLimited(shopDomain: string): boolean {
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method !== "POST") {
-    return Response.json({ error: "Method not allowed" }, { status: 405 });
+    return jsonResponse({ error: "Method not allowed" }, { status: 405 });
   }
 
   const { session } = await authenticate.public.appProxy(request);
-  if (!session?.shop) return Response.json({ error: "Unknown shop" }, { status: 401 });
+  if (!session?.shop) return jsonResponse({ error: "Unknown shop" }, { status: 401 });
 
   const { shop, settings } = await getSettings(session.shop);
-  if (!settings.allowUploads) {
-    return Response.json({ error: "Uploads are turned off for this store." }, { status: 403 });
+  const plan = await storedPlan(shop.id);
+  if (!settings.allowUploads || !plan.uploads) {
+    return jsonResponse({ error: "Uploads are turned off for this store." }, { status: 403 });
   }
   if (rateLimited(session.shop)) {
-    return Response.json({ error: "Too many uploads. Try again in a minute." }, { status: 429 });
+    return jsonResponse({ error: "Too many uploads. Try again in a minute." }, { status: 429 });
   }
 
   const form = await request.formData();
   const file = form.get("file");
   if (!(file instanceof File)) {
-    return Response.json({ error: "No file received." }, { status: 400 });
+    return jsonResponse({ error: "No file received." }, { status: 400 });
   }
   if (file.size > settings.maxUploadBytes) {
     const mb = (settings.maxUploadBytes / 1024 / 1024).toFixed(0);
-    return Response.json({ error: `That image is too large. The limit is ${mb} MB.` }, { status: 413 });
+    return jsonResponse({ error: `That image is too large. The limit is ${mb} MB.` }, { status: 413 });
   }
 
   const buf = Buffer.from(await file.arrayBuffer());
   // Re-check after reading: File.size is reported by the client.
   if (buf.byteLength > settings.maxUploadBytes) {
-    return Response.json({ error: "That image is too large." }, { status: 413 });
+    return jsonResponse({ error: "That image is too large." }, { status: 413 });
   }
 
-  const kind = MAGIC.find((m) => m.test(buf));
+  const kind = sniffImage(buf);
   if (!kind) {
-    return Response.json(
+    return jsonResponse(
       { error: "That file is not a JPEG, PNG or WebP image." },
       { status: 415 },
     );
   }
 
   const digest = hash(buf);
+
+  // An image the merchant has already rejected is refused outright, so the
+  // same picture cannot simply be uploaded again.
+  const rejected = await prisma.giftOrder.findFirst({
+    where: { shopId: shop.id, uploadHash: digest, uploadStatus: "rejected" },
+    select: { id: true },
+  });
+  if (rejected) {
+    return jsonResponse({ error: "This image can't be used. Please choose another." }, { status: 422 });
+  }
+
   const key = keyForUpload(session.shop, kind.ext);
   await put(key, buf);
 
-  // Recorded against the shop so a merchant approval queue has something to
-  // show, and so the same image arriving repeatedly is visible.
-  await prisma.giftDraft.updateMany({
-    where: { shopId: shop.id, uploadHash: digest, uploadStatus: "rejected" },
-    data: {},
-  });
-
-  return Response.json({
+  return jsonResponse({
     uploadKey: key,
     hash: digest,
     status: settings.moderateUploads ? "pending" : "approved",

@@ -16,9 +16,13 @@
     "postinstall": "prisma generate",
     "lint": "eslint --cache --cache-location ./node_modules/.cache/eslint .",
     "shopify": "shopify",
-    "prisma": "prisma"
+    "prisma": "prisma",
+    "typecheck": "tsc --noEmit",
+    "docker-start": "npm run setup && npm run start"
   },
-  "engines": { "node": ">=20.19 <22 || >=22.12" },
+  "engines": {
+    "node": ">=20.19 <22 || >=22.12"
+  },
   "dependencies": {
     "@prisma/client": "^6.2.1",
     "@remix-run/dev": "^2.16.1",
@@ -51,7 +55,15 @@
     "typescript": "^5.2.2",
     "vite": "^6.2.2"
   },
-  "workspaces": { "packages": ["extensions/*"] },
-  "resolutions": { "@shopify/shopify-api": "13.1.0" },
-  "overrides": { "@shopify/shopify-api": "13.1.0" }
+  "workspaces": {
+    "packages": [
+      "extensions/*"
+    ]
+  },
+  "resolutions": {
+    "@shopify/shopify-api": "13.1.0"
+  },
+  "overrides": {
+    "@shopify/shopify-api": "13.1.0"
+  }
 }

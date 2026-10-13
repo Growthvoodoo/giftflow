@@ -32,10 +32,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           where: { shopId: shop.id, orderId: { in: orderIds } },
           data: {
             messageHtml: "",
+            uploadHash: null,
             messageText: "[redacted]",
             recipient: null,
             sender: null,
             customerName: null,
+            customerEmail: null,
           },
         });
       }

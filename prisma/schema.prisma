@@ -38,11 +38,11 @@ model Session {
 
 /// One row per install.
 model Shop {
-  id          String    @id @default(cuid())
-  domain      String    @unique
-  name        String?
-  plan        String    @default("free")
-  installedAt DateTime  @default(now())
+  id            String    @id @default(cuid())
+  domain        String    @unique
+  name          String?
+  plan          String    @default("free")
+  installedAt   DateTime  @default(now())
   uninstalledAt DateTime?
 
   settings   Settings?
@@ -78,13 +78,22 @@ model Settings {
 
   /// Print. A public app cannot assume one card stock, so trim and bleed are
   /// merchant settings rather than constants.
-  pdfWidthMm  Float  @default(105)
-  pdfHeightMm Float  @default(148)
-  pdfBleedMm  Float  @default(3)
-  pdfCropMarks Boolean @default(true)
+  pdfWidthMm           Float   @default(105)
+  pdfHeightMm          Float   @default(148)
+  pdfBleedMm           Float   @default(3)
+  pdfCropMarks         Boolean @default(true)
+  /// "overlay" (message printed on the artwork) | "two-sided" (artwork, then
+  /// message on a second page) | "message-only" (for pre-printed card stock)
+  pdfLayout            String  @default("overlay")
   /// Shown on packing slips so the merchant still sees the gift without the app.
-  visiblePropertyName  String @default("Gift kort")
-  visiblePropertyValue String @default("Ja")
+  visiblePropertyName  String  @default("Gift kort")
+  visiblePropertyValue String  @default("Ja")
+
+  /// Staff print dashboard (GiftFlow-Dashboard). Only a SHA-256 of the key is
+  /// stored; the key itself is shown once, when it is generated.
+  staffApiKeyHash      String?   @unique
+  staffApiKeyHint      String?
+  staffApiKeyCreatedAt DateTime?
 
   updatedAt DateTime @updatedAt
 }
@@ -148,12 +157,12 @@ model GiftDraft {
   /// Either a catalogue card...
   cardDesignId String?
   /// ...or a customer upload. "pending" | "approved" | "rejected"
-  uploadKey      String?
-  uploadStatus   String?
-  uploadHash     String?
+  uploadKey    String?
+  uploadStatus String?
+  uploadHash   String?
 
-  messageHtml String @default("")
-  messageText String @default("")
+  messageHtml String  @default("")
+  messageText String  @default("")
   recipient   String?
   sender      String?
 
@@ -178,14 +187,23 @@ model GiftOrder {
   lineItemId    String
   orderedAt     DateTime
   customerName  String?
+  customerEmail String?
 
   /// Snapshot
   cardTitle    String?
   cardImageKey String?
-  messageHtml  String @default("")
-  messageText  String @default("")
+  messageHtml  String  @default("")
+  messageText  String  @default("")
   recipient    String?
   sender       String?
+
+  /// Customer uploads only: "pending" | "approved" | "rejected". Null for a
+  /// catalogue card. A pending or rejected card is never printed.
+  uploadStatus String?
+  uploadHash   String?
+  /// Arrived after the shop's plan limit for the month was used up. Kept, so
+  /// nothing is lost, but held from printing until the plan is upgraded.
+  overLimit    Boolean @default(false)
 
   /// "new" | "printed" | "packed"
   status    String    @default("new")
@@ -201,6 +219,7 @@ model GiftOrder {
   @@unique([shopId, lineItemId])
   @@index([shopId, status])
   @@index([shopId, orderedAt])
+  @@index([shopId, uploadHash])
 }
 
 /// A batch print. Fifty orders a day makes one-click-per-order painful.

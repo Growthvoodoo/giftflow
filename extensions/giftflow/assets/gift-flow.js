@@ -18,6 +18,7 @@
   if (!root) return;
 
   const proxy = root.dataset.proxy || "/apps/giftflow";
+  const moneyFormat = (root.dataset.moneyFormat || "{{amount}}").replace(/<[^>]*>/g, "");
 
   const state = {
     step: 1,
@@ -42,6 +43,8 @@
     submit: $("[data-submit]"),
     fatal: $("[data-fatal]"),
     variants: $("[data-variants-target]"),
+    productGrid: $("[data-product-grid]"),
+    cardPrice: $("[data-card-price]"),
     cards: $("[data-cards]"),
     categories: $("[data-categories]"),
     upload: $("[data-upload]"),
@@ -103,8 +106,12 @@
 
   // ── step 1: product ────────────────────────────────────────────────────────
 
-  $$("[data-product]").forEach((btn) => {
-    btn.addEventListener("click", () => {
+  // Delegated, so products rendered by Liquid and products loaded by
+  // loadProducts() below behave the same.
+  if (els.productGrid) {
+    els.productGrid.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-product]");
+      if (!btn) return;
       $$("[data-product]").forEach((b) => b.classList.remove("is-selected"));
       btn.classList.add("is-selected");
 
@@ -123,7 +130,64 @@
       renderVariants();
       refreshNext();
     });
-  });
+  }
+
+  /**
+   * When the block has no collection of its own, the products come from the
+   * collection set in the app, read from the storefront's public JSON.
+   */
+  async function loadProducts(handle) {
+    if (!els.productGrid || els.productGrid.querySelector("[data-product]")) return;
+    const loading = els.productGrid.querySelector("[data-products-loading]");
+    if (!handle) {
+      if (loading) loading.textContent = "No gift collection is set yet.";
+      return;
+    }
+    try {
+      const res = await fetch(`/collections/${encodeURIComponent(handle)}/products.json?limit=48`);
+      if (!res.ok) throw new Error(`Products unavailable (${res.status})`);
+      const { products = [] } = await res.json();
+      els.productGrid.innerHTML = "";
+      if (!products.length) {
+        els.productGrid.innerHTML = '<p class="giftflow__empty">That collection has no products yet.</p>';
+        return;
+      }
+      products.forEach((p) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "giftflow__product";
+        btn.dataset.product = "";
+        btn.dataset.productHandle = p.handle;
+        btn.dataset.productTitle = p.title;
+        btn.dataset.variants = JSON.stringify(
+          (p.variants || []).map((v) => ({ id: v.id, title: v.title, available: v.available !== false })),
+        );
+        const img = p.images && p.images[0];
+        if (img) {
+          const el = document.createElement("img");
+          el.src = img.src + (img.src.includes("?") ? "&" : "?") + "width=400";
+          el.alt = p.title;
+          el.loading = "lazy";
+          btn.appendChild(el);
+        }
+        const title = document.createElement("span");
+        title.className = "giftflow__product-title";
+        title.textContent = p.title;
+        btn.appendChild(title);
+        const price = p.variants && p.variants[0] && p.variants[0].price;
+        if (price) {
+          const pr = document.createElement("span");
+          pr.className = "giftflow__product-price";
+          pr.textContent = formatMoney(Math.round(Number(price) * 100));
+          btn.appendChild(pr);
+        }
+        els.productGrid.appendChild(btn);
+      });
+    } catch (err) {
+      console.error("[giftflow]", err);
+      if (loading) loading.textContent = "The gifts could not be loaded. Please reload the page.";
+    }
+  }
 
   function renderVariants() {
     els.variants.innerHTML = "";
@@ -158,7 +222,13 @@
       state.categories = data.categories || [];
 
       els.limit.textContent = String(state.settings.messageMaxChars);
+      els.message.maxLength = state.settings.messageMaxChars;
       els.upload.hidden = !state.settings.allowUploads;
+      if (els.cardPrice && state.settings.cardVariantId && state.settings.cardPriceMinor > 0) {
+        els.cardPrice.textContent = `The card costs ${formatMoney(state.settings.cardPriceMinor)}.`;
+        els.cardPrice.hidden = false;
+      }
+      if (!root.dataset.collection) loadProducts(state.settings.giftCollectionHandle);
 
       renderCategories();
       renderCards();
@@ -290,7 +360,8 @@
         body: JSON.stringify({
           cardDesignId: state.cardId || undefined,
           uploadKey: state.uploadKey || undefined,
-          messageHtml: els.message.value,
+          // Plain text; the app turns it into sanitized paragraphs.
+          message: els.message.value,
           recipient: els.recipient.value || undefined,
           sender: els.sender.value || undefined,
         }),
@@ -339,6 +410,25 @@
     el.hidden = false;
   }
   function hide(el) { if (el) el.hidden = true; }
+
+  /** Shopify money formats: {{amount}}, {{amount_no_decimals}}, {{amount_with_comma_separator}}… */
+  function formatMoney(cents) {
+    const n = Number(cents) / 100;
+    const fixed = (d) => n.toFixed(d);
+    const withSep = (d, thou, dec) => {
+      const [i, f] = fixed(d).split(".");
+      return i.replace(/\B(?=(\d{3})+(?!\d))/g, thou) + (f ? dec + f : "");
+    };
+    return moneyFormat.replace(/\{\{\s*(\w+)\s*\}\}/, (_, kind) => {
+      switch (kind) {
+        case "amount_no_decimals": return withSep(0, ",", ".");
+        case "amount_with_comma_separator": return withSep(2, ".", ",");
+        case "amount_no_decimals_with_comma_separator": return withSep(0, ".", ",");
+        case "amount_with_apostrophe_separator": return withSep(2, "'", ".");
+        default: return withSep(2, ",", ".");
+      }
+    });
+  }
   function fatal(msg) { showError(els.fatal, msg); }
 
   loadCards();

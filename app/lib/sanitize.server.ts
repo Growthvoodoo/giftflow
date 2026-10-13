@@ -38,8 +38,35 @@ export function sanitizeMessage(html: string): string {
 
 /** Plain text for search, list views and the character limit. */
 export function toPlainText(html: string): string {
-  return sanitizeHtml(html ?? "", { allowedTags: [], allowedAttributes: {} })
-    .replace(/&nbsp;/g, " ")
+  // Block ends become spaces so "<p>Hi</p><p>there</p>" reads "Hi there".
+  const spaced = (html ?? "").replace(/<\/(p|li|h[1-3]|blockquote)>|<br\s*\/?>/gi, "$& ");
+  return decodeEntities(sanitizeHtml(spaced, { allowedTags: [], allowedAttributes: {} }))
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/** sanitize-html returns entity-escaped text; the plain-text copy should not be. */
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&nbsp;/g, " ")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#0*39;|&apos;/g, "'")
+    .replace(/&amp;/g, "&");
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!,
+  );
+}
+
+/** A plain-text message (one paragraph per line) as the HTML the card renders. */
+export function textToHtml(text: string): string {
+  return text
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => `<p>${escapeHtml(line) || "<br>"}</p>`)
+    .join("");
 }

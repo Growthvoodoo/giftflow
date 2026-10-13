@@ -1,29 +1,31 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
-import { get } from "../lib/storage.server";
-
-const TYPES: Record<string, string> = {
-  jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png",
-  webp: "image/webp", pdf: "application/pdf",
-};
+import { get, isPublicKey, mimeFor } from "../lib/storage.server";
 
 /**
- * Serves stored card images and rendered PDFs.
+ * Serves stored card images — catalogue artwork and customer uploads — to the
+ * storefront, the admin and the staff dashboard.
  *
- * Local disk only — this route exists so the rest of the app can reference a
- * stable URL. Point a CDN at object storage instead before real traffic; the
- * database stores keys, not URLs, precisely so that swap costs nothing.
+ * Images only. Rendered PDFs carry customer messages and are never served
+ * here; they come from the authenticated print routes. File names are random
+ * (see storage.server.ts), so an image URL cannot be guessed.
+ *
+ * Local disk for now. Point a CDN at object storage before real traffic; rows
+ * store keys, not URLs, so that swap costs no migration.
  */
 export const loader = async ({ params }: LoaderFunctionArgs) => {
-  const key = params["*"];
-  if (!key) return new Response("Not found", { status: 404 });
+  const key = decodeURIComponent(params["*"] ?? "");
+  if (!key || !isPublicKey(key)) return new Response("Not found", { status: 404 });
 
   try {
     const data = await get(key);
-    const ext = key.split(".").pop()?.toLowerCase() ?? "";
-    return new Response(data, {
+    return new Response(new Uint8Array(data), {
       headers: {
-        "Content-Type": TYPES[ext] ?? "application/octet-stream",
+        "Content-Type": mimeFor(key),
         "Cache-Control": "public, max-age=31536000, immutable",
+        "X-Content-Type-Options": "nosniff",
+        // The storefront shows these from the shop's own domain.
+        "Access-Control-Allow-Origin": "*",
+        "Cross-Origin-Resource-Policy": "cross-origin",
       },
     });
   } catch {

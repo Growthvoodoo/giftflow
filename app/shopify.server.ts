@@ -2,10 +2,24 @@ import "@shopify/shopify-app-remix/adapters/node";
 import {
   ApiVersion,
   AppDistribution,
+  BillingInterval,
   shopifyApp,
 } from "@shopify/shopify-app-remix/server";
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
 import prisma from "./db.server";
+import { PAID_PLANS } from "./lib/plans";
+
+// One Billing API plan per paid tier. Free has no subscription at all.
+const billing = Object.fromEntries(
+  PAID_PLANS.map((p) => [
+    p.billingName,
+    {
+      lineItems: [
+        { amount: p.priceUsd, currencyCode: "USD", interval: BillingInterval.Every30Days },
+      ],
+    },
+  ]),
+) as Record<string, { lineItems: [{ amount: number; currencyCode: string; interval: BillingInterval.Every30Days }] }>;
 
 const shopify = shopifyApp({
   apiKey: process.env.SHOPIFY_API_KEY,
@@ -16,6 +30,7 @@ const shopify = shopifyApp({
   authPathPrefix: "/auth",
   sessionStorage: new PrismaSessionStorage(prisma),
   distribution: AppDistribution.AppStore,
+  billing,
   future: {
     unstable_newEmbeddedAuthStrategy: true,
     // Offline tokens expire after an hour and rotate on a 90-day refresh token.
