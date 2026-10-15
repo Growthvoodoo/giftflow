@@ -31,6 +31,9 @@ model Session {
   locale        String?
   collaborator  Boolean?  @default(false)
   emailVerified Boolean?  @default(false)
+  /// Required by session-storage-prisma v8 for expiring offline tokens.
+  refreshToken        String?
+  refreshTokenExpires DateTime?
 
   @@index([shop])
 }
