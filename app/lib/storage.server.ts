@@ -5,10 +5,49 @@ import { dirname, join, resolve } from "node:path";
 /**
  * Card images and rendered PDFs.
  *
- * Local disk for now, deliberately behind three functions so the move to object
- * storage is a change here and nowhere else. Rows store a KEY, never a URL, so
- * nothing in the database has to be rewritten when that happens.
+ * Two backends behind the same functions:
+ *  - Vercel Blob, when BLOB_READ_WRITE_TOKEN is set (Vercel, or any host).
+ *    Required on Vercel: its functions cannot keep files on disk.
+ *  - Local disk (STORAGE_DIR) otherwise — development, or a normal server.
+ *
+ * Rows store a KEY, never a URL, so switching backends needs no migration.
+ * Every key carries a random part, so a public Blob URL cannot be guessed.
  */
+
+export function usingBlob(): boolean {
+  // A store connected to the Vercel project provides BLOB_STORE_ID (the SDK
+  // then authenticates with Vercel's OIDC token); a manually added token
+  // provides BLOB_READ_WRITE_TOKEN. Either one switches storage to Blob.
+  return Boolean(process.env.BLOB_STORE_ID || process.env.BLOB_READ_WRITE_TOKEN);
+}
+
+/**
+ * Vercel Blob stores are created either public or private and cannot change.
+ * Private (the default here) means every read goes through this app with the
+ * token, so customer images and PDFs are never directly reachable. Set
+ * BLOB_ACCESS=public only if the store was created as public.
+ */
+function blobAccess(): "public" | "private" {
+  return process.env.BLOB_ACCESS === "public" ? "public" : "private";
+}
+
+async function blob() {
+  return import("@vercel/blob");
+}
+
+/** Reads a blob as a stream, or null when it does not exist. */
+export async function blobStream(
+  key: string,
+): Promise<{ stream: ReadableStream<Uint8Array>; size: number; contentType: string } | null> {
+  const { get: blobGet } = await blob();
+  try {
+    const res = await blobGet(key, { access: blobAccess() });
+    if (!res || res.statusCode !== 200) return null;
+    return { stream: res.stream, size: res.blob.size, contentType: res.blob.contentType };
+  } catch {
+    return null;
+  }
+}
 
 const ROOT = resolve(process.env.STORAGE_DIR || "./storage");
 
@@ -21,6 +60,17 @@ function pathFor(key: string): string {
 }
 
 export async function put(key: string, data: Buffer): Promise<string> {
+  if (usingBlob()) {
+    const { put: blobPut } = await blob();
+    await blobPut(key, data, {
+      access: blobAccess(),
+      addRandomSuffix: false,
+      allowOverwrite: true,
+      contentType: mimeFor(key),
+      cacheControlMaxAge: 31536000,
+    });
+    return key;
+  }
   const full = pathFor(key);
   await mkdir(dirname(full), { recursive: true });
   await writeFile(full, data);
@@ -28,6 +78,11 @@ export async function put(key: string, data: Buffer): Promise<string> {
 }
 
 export async function get(key: string): Promise<Buffer> {
+  if (usingBlob()) {
+    const found = await blobStream(key);
+    if (!found) throw new Error(`Not found: ${key}`);
+    return Buffer.from(await new Response(found.stream).arrayBuffer());
+  }
   return readFile(pathFor(key));
 }
 
@@ -110,6 +165,7 @@ export function keyForCard(shopDomain: string, ext: string): string {
   return `${shopDomain}/cards/${randomName(ext)}`;
 }
 
+/** Starts with `${id}-` so a cached render can be recognised; random after that. */
 export function keyForPdf(shopDomain: string, id: string): string {
-  return `${shopDomain}/pdf/${id}.pdf`;
+  return `${shopDomain}/pdf/${id}-${randomBytes(9).toString("base64url")}.pdf`;
 }

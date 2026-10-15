@@ -3,7 +3,7 @@ import type { ActionFunctionArgs } from "@remix-run/node";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { getSettings } from "../lib/shop.server";
-import { hash, keyForUpload, put } from "../lib/storage.server";
+import { hash, keyForUpload, put, usingBlob } from "../lib/storage.server";
 import { sniffImage } from "../lib/images.server";
 import { storedPlan } from "../lib/billing.server";
 
@@ -47,19 +47,24 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return jsonResponse({ error: "Too many uploads. Try again in a minute." }, { status: 429 });
   }
 
+  // On Vercel, images are served through a function capped at ~4.5 MB.
+  const maxBytes = usingBlob()
+    ? Math.min(settings.maxUploadBytes, 4 * 1024 * 1024)
+    : settings.maxUploadBytes;
+
   const form = await request.formData();
   const file = form.get("file");
   if (!(file instanceof File)) {
     return jsonResponse({ error: "No file received." }, { status: 400 });
   }
-  if (file.size > settings.maxUploadBytes) {
-    const mb = (settings.maxUploadBytes / 1024 / 1024).toFixed(0);
+  if (file.size > maxBytes) {
+    const mb = (maxBytes / 1024 / 1024).toFixed(0);
     return jsonResponse({ error: `That image is too large. The limit is ${mb} MB.` }, { status: 413 });
   }
 
   const buf = Buffer.from(await file.arrayBuffer());
   // Re-check after reading: File.size is reported by the client.
-  if (buf.byteLength > settings.maxUploadBytes) {
+  if (buf.byteLength > maxBytes) {
     return jsonResponse({ error: "That image is too large." }, { status: 413 });
   }
 

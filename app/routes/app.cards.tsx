@@ -9,7 +9,7 @@ import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { getSettings } from "../lib/shop.server";
-import { keyForCard, put, urlFor } from "../lib/storage.server";
+import { keyForCard, put, urlFor, usingBlob } from "../lib/storage.server";
 import { sniffImage } from "../lib/images.server";
 import { storedPlan } from "../lib/billing.server";
 
@@ -73,7 +73,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const title = String(form.get("title") || "").trim();
     if (!(file instanceof File) || file.size === 0) return fail("Choose an image for the card.");
     if (!title) return fail("Give the card a title.");
-    if (file.size > 25 * 1024 * 1024) return fail("Card artwork must be under 25 MB.");
+    // On Vercel, images are served through a function capped at ~4.5 MB.
+    const maxMb = usingBlob() ? 4 : 25;
+    if (file.size > maxMb * 1024 * 1024) {
+      return fail(`Card artwork must be under ${maxMb} MB. Export it as a JPEG at print size (about 1300 × 1800 px for A6).`);
+    }
 
     const plan = await storedPlan(shop.id);
     if (plan.maxCards !== null) {

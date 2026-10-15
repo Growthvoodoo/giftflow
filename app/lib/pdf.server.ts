@@ -132,6 +132,19 @@ type Browser = Awaited<ReturnType<typeof import("playwright-core")["chromium"]["
  */
 async function launch(): Promise<Browser> {
   const { chromium } = await import("playwright-core");
+
+  // Vercel (and other serverless hosts) ship no browser. @sparticuz/chromium-min
+  // downloads a Lambda-ready Chromium into /tmp on the first print of a cold
+  // start and reuses it afterwards.
+  if (process.env.VERCEL || process.env.CHROMIUM_PACK_URL) {
+    const sparticuz = (await import("@sparticuz/chromium-min")).default;
+    const executablePath = await sparticuz.executablePath(
+      process.env.CHROMIUM_PACK_URL ||
+        "https://github.com/Sparticuz/chromium/releases/download/v153.0.0/chromium-v153.0.0-pack.x64.tar",
+    );
+    return chromium.launch({ executablePath, args: sparticuz.args, headless: true });
+  }
+
   return chromium.launch({
     args: ["--no-sandbox", "--disable-dev-shm-usage"],
     executablePath: process.env.CHROMIUM_PATH || undefined,
@@ -238,15 +251,18 @@ export async function pdfForOrder(
     include: { shop: { select: { domain: true } } },
   });
 
-  const key = keyForPdf(order.shop.domain, `${order.id}-${specTag(spec)}`);
-  if (order.pdfKey === key) {
+  // The cached file name starts with the order id and the page spec, then a
+  // random part (so its URL cannot be guessed when storage is public).
+  const prefix = `${order.shop.domain}/pdf/${order.id}-${specTag(spec)}-`;
+  if (order.pdfKey?.startsWith(prefix)) {
     try {
-      await get(key);
-      return key;
+      await get(order.pdfKey);
+      return order.pdfKey;
     } catch {
       /* cache file missing — render again */
     }
   }
+  const key = keyForPdf(order.shop.domain, `${order.id}-${specTag(spec)}`);
 
   const html = cardHtml(spec, {
     imageUrl: order.cardImageKey ? await dataUriFor(order.cardImageKey) : null,
