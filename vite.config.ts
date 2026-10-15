@@ -1,5 +1,6 @@
 import { vitePlugin as remix } from "@remix-run/dev";
 import { installGlobals } from "@remix-run/node";
+import { vercelPreset } from "@vercel/remix/vite";
 import { defineConfig, type UserConfig } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 
@@ -61,6 +62,9 @@ export default defineConfig({
   },
   plugins: [
     remix({
+      // Vercel's preset: builds the server into a Vercel function. Off
+      // everywhere else, so `npm run build` + `remix-serve` still works on a VPS.
+      presets: process.env.VERCEL ? [vercelPreset()] : [],
       ignoredRouteFiles: ["**/.*"],
       future: {
         v3_fetcherPersist: true,

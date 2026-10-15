@@ -10,3 +10,4 @@ node_modules
 /prisma/dev.db*
 /storage
 node_modules/
+.vercel
