@@ -42,7 +42,7 @@
     "prisma": "^6.2.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "sanitize-html": "^2.13.1",
+    "sanitize-html": "2.17.0",
     "vite-tsconfig-paths": "^5.0.1"
   },
   "devDependencies": {
@@ -51,7 +51,7 @@
     "@types/node": "^22.2.0",
     "@types/react": "^18.2.31",
     "@types/react-dom": "^18.2.14",
-    "@types/sanitize-html": "^2.13.0",
+    "@types/sanitize-html": "2.13.0",
     "eslint": "^8.42.0",
     "prettier": "^3.2.4",
     "typescript": "^5.2.2",
