@@ -9,7 +9,7 @@
 client_id = "1c0ac4f4bebf128d097b7d74d98b4d4e"
 name = "GiftFlow"
 handle = "giftflow-acemakers"
-application_url = "https://example.com"
+application_url = "https://giftflow-brown.vercel.app"
 embedded = true
 
 [build]
@@ -24,8 +24,8 @@ scopes = "read_products,write_products,read_orders"
 
 [auth]
 redirect_urls = [
-  "https://example.com/auth/callback",
-  "https://example.com/auth/shopify/callback"
+  "https://giftflow-brown.vercel.app/auth/callback",
+  "https://giftflow-brown.vercel.app/auth/shopify/callback"
 ]
 
 # Storefront app proxy. Everything the theme extension calls goes through here:
@@ -35,7 +35,7 @@ redirect_urls = [
 #   https://{shop}/apps/giftflow/uploads  -> POST customer image
 #   https://{shop}/apps/giftflow/drafts   -> POST card + message, returns token
 [app_proxy]
-url = "https://example.com/proxy"
+url = "https://giftflow-brown.vercel.app/proxy"
 subpath = "giftflow"
 prefix = "apps"
 

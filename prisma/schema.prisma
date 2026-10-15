@@ -1,12 +1,11 @@
 // GiftFlow — data model
 //
-// SQLite for now, as agreed: local development only. Everything here is written
-// to survive the move to Postgres with nothing but a provider change —
+// Postgres (Prisma Postgres on Vercel for testing). Written to stay portable:
 // no enums, no scalar lists, no native type attributes. Status columns are
 // plain strings with the allowed values written above them.
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
