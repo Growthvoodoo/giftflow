@@ -13,7 +13,7 @@ application_url = "https://giftflow-brown.vercel.app"
 embedded = true
 
 [build]
-automatically_update_urls_on_dev = true
+automatically_update_urls_on_dev = false
 
 [access_scopes]
 # read_products/write_products  — the flow reads the gift collection, and the
