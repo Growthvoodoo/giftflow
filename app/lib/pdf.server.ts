@@ -138,10 +138,24 @@ async function launch(): Promise<Browser> {
   // start and reuses it afterwards.
   if (process.env.VERCEL || process.env.CHROMIUM_PACK_URL) {
     const sparticuz = (await import("@sparticuz/chromium-min")).default;
-    const executablePath = await sparticuz.executablePath(
+    const packUrl =
       process.env.CHROMIUM_PACK_URL ||
-        "https://github.com/Sparticuz/chromium/releases/download/v153.0.0/chromium-v153.0.0-pack.x64.tar",
-    );
+      "https://github.com/Sparticuz/chromium/releases/download/v153.0.0/chromium-v153.0.0-pack.x64.tar";
+
+    // @vercel/remix replaces global fetch with Remix's polyfill, whose response
+    // bodies are not Node's own ReadableStream — and @sparticuz downloads the
+    // pack with global fetch + Readable.fromWeb(), which then throws
+    // "must be an instance of ReadableStream". Lend it Node's real fetch
+    // (undici) for the download only.
+    const { fetch: nodeFetch } = await import("undici");
+    const previousFetch = globalThis.fetch;
+    globalThis.fetch = nodeFetch as unknown as typeof fetch;
+    let executablePath: string;
+    try {
+      executablePath = await sparticuz.executablePath(packUrl);
+    } finally {
+      globalThis.fetch = previousFetch;
+    }
     return chromium.launch({ executablePath, args: sparticuz.args, headless: true });
   }
 
