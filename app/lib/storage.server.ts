@@ -35,16 +35,36 @@ async function blob() {
   return import("@vercel/blob");
 }
 
-/** Reads a blob as a stream, or null when it does not exist. */
-export async function blobStream(
+/**
+ * Drains a web ReadableStream chunk by chunk. Deliberately avoids
+ * `new Response(stream)` and Node's `Readable.fromWeb`: on Vercel the Blob
+ * SDK's stream and the runtime's globals can come from two different
+ * ReadableStream implementations, and those helpers reject the "foreign" one
+ * ("must be an instance of ReadableStream. Received an instance of
+ * ReadableStream"). A reader works with either.
+ */
+async function drain(stream: ReadableStream<Uint8Array>): Promise<Buffer> {
+  const reader = stream.getReader();
+  const chunks: Buffer[] = [];
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value) chunks.push(Buffer.from(value));
+  }
+  return Buffer.concat(chunks);
+}
+
+/** Reads a blob into memory, or null when it does not exist. */
+export async function blobRead(
   key: string,
-): Promise<{ stream: ReadableStream<Uint8Array>; size: number; contentType: string } | null> {
+): Promise<{ data: Buffer; contentType: string } | null> {
   const { get: blobGet } = await blob();
   try {
     const res = await blobGet(key, { access: blobAccess() });
     if (!res || res.statusCode !== 200) return null;
-    return { stream: res.stream, size: res.blob.size, contentType: res.blob.contentType };
-  } catch {
+    return { data: await drain(res.stream), contentType: res.blob.contentType };
+  } catch (e) {
+    console.error(`[giftflow] blob read failed for ${key}:`, e);
     return null;
   }
 }
@@ -79,9 +99,9 @@ export async function put(key: string, data: Buffer): Promise<string> {
 
 export async function get(key: string): Promise<Buffer> {
   if (usingBlob()) {
-    const found = await blobStream(key);
+    const found = await blobRead(key);
     if (!found) throw new Error(`Not found: ${key}`);
-    return Buffer.from(await new Response(found.stream).arrayBuffer());
+    return found.data;
   }
   return readFile(pathFor(key));
 }

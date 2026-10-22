@@ -1,5 +1,5 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
-import { blobStream, get, isPublicKey, mimeFor, usingBlob } from "../lib/storage.server";
+import { blobRead, get, isPublicKey, mimeFor, usingBlob } from "../lib/storage.server";
 
 /**
  * Serves stored card images — catalogue artwork and customer uploads — to the
@@ -20,9 +20,9 @@ export const loader = async ({ params }: LoaderFunctionArgs) => {
   // with the token. Card artwork should stay under ~4 MB: Vercel caps a
   // function response at about 4.5 MB.
   if (usingBlob()) {
-    const found = await blobStream(key);
+    const found = await blobRead(key);
     if (!found) return new Response("Not found", { status: 404 });
-    return new Response(found.stream, {
+    return new Response(new Uint8Array(found.data), {
       headers: {
         "Content-Type": found.contentType || mimeFor(key),
         "Cache-Control": "public, max-age=31536000, immutable",
